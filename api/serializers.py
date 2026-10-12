@@ -487,6 +487,11 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
                 if not meta_s.get('isHistoricalLabor'):
                     c_p = Decimal(str(meta_s.get('cementLoadingPaidAmount') or (meta_s.get('cementLaborCost') if meta_s.get('cementLoadingPaid') else 0) or 0))
                     extra_sales_cash_out += c_p
+            # Cement unloading
+            if not s.invoice_no or s.invoice_no not in covered_labor_invoices:
+                if not meta_s.get('isHistoricalLabor'):
+                    cu_p = Decimal(str(meta_s.get('cementUnloadingPaidAmount') or (meta_s.get('cementUnloadingCost') if meta_s.get('cementUnloadingPaid') else 0) or 0))
+                    extra_sales_cash_out += cu_p
             # Rod labor loading
             if not s.invoice_no or s.invoice_no not in covered_labor_invoices:
                 if not meta_s.get('isHistoricalLabor'):
