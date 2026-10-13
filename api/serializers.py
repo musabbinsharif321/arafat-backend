@@ -528,18 +528,21 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
     sale_return_cash_out = sale_returns_qs.filter(payment_method__in=cash_methods).aggregate(tot=Sum('paid_amount'))['tot'] or Decimal('0.00')
     sale_return_bank_out = sale_returns_qs.filter(payment_method__in=bank_methods).aggregate(tot=Sum('paid_amount'))['tot'] or Decimal('0.00')
 
+    # Exclude payment_out transactions that are already recorded as separate Expenses (labor/loading/shipping) to prevent double deduction
+    cash_p_out_qs = filtered_p_out_qs.exclude(notes__contains='isLaborExpense').exclude(notes__contains='isShippingExpense').exclude(notes__contains='[লেবার খরচ পরিশোধ').exclude(notes__contains='গাড়ি ভাড়া পরিশোধ]')
+
     cash_out = (
         (purchases_qs.filter(payment_method__in=cash_methods).aggregate(tot=Sum('paid_amount'))['tot'] or Decimal('0.00')) +
         sale_return_cash_out +
         extra_purchase_cash_out +
         extra_sales_cash_out +
-        (filtered_p_out_qs.filter(payment_method__in=cash_methods).aggregate(tot=Sum('paid_amount'))['tot'] or Decimal('0.00')) +
+        (cash_p_out_qs.filter(payment_method__in=cash_methods).aggregate(tot=Sum('paid_amount'))['tot'] or Decimal('0.00')) +
         (filtered_exp_qs.filter(payment_method__in=cash_methods).aggregate(tot=Sum('amount'))['tot'] or Decimal('0.00'))
     )
     cash_balance = cash_in - cash_out
 
-    # Exclude internal balance transfers from bank_out since Bank balances are already updated directly
-    bank_p_out_qs = filtered_p_out_qs.exclude(notes__contains='isTransfer').exclude(notes__contains='ব্যালেন্স ট্রান্সফার').exclude(party_name__contains='➔')
+    # Exclude internal balance transfers and duplicate labor/shipping expenses from bank_out
+    bank_p_out_qs = filtered_p_out_qs.exclude(notes__contains='isTransfer').exclude(notes__contains='ব্যালেন্স ট্রান্সফার').exclude(party_name__contains='➔').exclude(notes__contains='isLaborExpense').exclude(notes__contains='isShippingExpense').exclude(notes__contains='[লেবার খরচ পরিশোধ').exclude(notes__contains='গাড়ি ভাড়া পরিশোধ]')
     bank_out = (
         (purchases_qs.filter(payment_method__in=bank_methods).aggregate(tot=Sum('paid_amount'))['tot'] or Decimal('0.00')) +
         sale_return_bank_out +
