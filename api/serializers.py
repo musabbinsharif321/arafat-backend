@@ -447,24 +447,55 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
     covered_cement_unloading_invoices = set()
     covered_rod_labor_invoices = set()
 
+    import re
+
     for e in exp_qs:
         title = e.title or ''
         notes = e.notes or ''
         text = f"{title} {notes}"
-        if 'INV-' in text:
-            import re
-            for inv in re.findall(r'INV-[A-Za-z0-9-]+', text):
-                if 'পরিবহন' in title or 'গাড়ি ভাড়া' in title or 'ভাড়া' in title or 'isShippingExpense' in notes:
-                    covered_shipping_invoices.add(inv)
-                if 'ক্রয়' in title or 'ক্রয়' in notes:
-                    if 'লেবার' in title or 'আনলোডিং' in title or 'আনলোড' in title or 'isLaborExpense' in notes:
-                        covered_purchase_labor_invoices.add(inv)
-                if 'আনলোডিং' in title or 'আনলোড' in title or 'cement_unloading' in notes:
-                    covered_cement_unloading_invoices.add(inv)
-                elif 'রড' in title or 'rod_loading' in notes:
-                    covered_rod_labor_invoices.add(inv)
-                elif 'লোডিং' in title or 'loading' in notes or 'লেবার' in title or 'isLaborExpense' in notes:
-                    covered_cement_loading_invoices.add(inv)
+        
+        found_invs = set()
+        # 1. Match INV-... or PUR-... (case-insensitive)
+        for inv in re.findall(r'(?:INV|PUR)-[A-Za-z0-9-]+', text, re.IGNORECASE):
+            inv_clean = inv.strip()
+            found_invs.add(inv_clean)
+            found_invs.add(inv_clean.upper())
+            found_invs.add(inv_clean.lower())
+        
+        # 2. Match বাংলা চালান ফরম্যাট যেমন চালান #... বা চালান নং: ...
+        for inv in re.findall(r'চালান(?:\s*নং)?[:\s]*#?\s*([A-Za-z0-9-]+)', text):
+            inv_clean = inv.strip()
+            if inv_clean:
+                found_invs.add(inv_clean)
+                found_invs.add(inv_clean.upper())
+                found_invs.add(inv_clean.lower())
+                
+        # 3. Check JSON in notes
+        if notes and notes.strip().startswith('{'):
+            try:
+                meta_e = json.loads(notes.split('\n')[0])
+                for key in ['invoiceId', 'invoiceNo', 'invoice_no', 'invoice_id']:
+                    val = meta_e.get(key)
+                    if val:
+                        s_val = str(val).strip()
+                        found_invs.add(s_val)
+                        found_invs.add(s_val.upper())
+                        found_invs.add(s_val.lower())
+            except Exception:
+                pass
+
+        for inv in found_invs:
+            if 'পরিবহন' in title or 'গাড়ি ভাড়া' in title or 'ভাড়া' in title or 'isShippingExpense' in notes:
+                covered_shipping_invoices.add(inv)
+            if 'ক্রয়' in title or 'ক্রয়' in notes:
+                if 'লেবার' in title or 'আনলোডিং' in title or 'আনলোড' in title or 'isLaborExpense' in notes:
+                    covered_purchase_labor_invoices.add(inv)
+            if 'আনলোডিং' in title or 'আনলোড' in title or 'cement_unloading' in notes:
+                covered_cement_unloading_invoices.add(inv)
+            elif 'রড' in title or 'rod_loading' in notes:
+                covered_rod_labor_invoices.add(inv)
+            elif 'লোডিং' in title or 'loading' in notes or 'লেবার' in title or 'isLaborExpense' in notes:
+                covered_cement_loading_invoices.add(inv)
 
     extra_purchase_cash_out = Decimal('0.00')
     for p in purchases_qs.filter(notes__startswith='{'):
@@ -473,12 +504,19 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
             s_payer = meta_p.get('shippingPayer', 'shop')
             l_payer = meta_p.get('laborPayer', 'shop')
             
+            p_inv = (p.invoice_no or '').strip()
+            is_ship_covered = bool(p_inv and (p_inv in covered_shipping_invoices or p_inv.upper() in covered_shipping_invoices))
+            is_labor_covered = bool(p_inv and (
+                p_inv in covered_purchase_labor_invoices or p_inv.upper() in covered_purchase_labor_invoices or
+                p_inv in covered_cement_unloading_invoices or p_inv.upper() in covered_cement_unloading_invoices
+            ))
+
             s_p = Decimal('0.00')
-            if s_payer != 'supplier' and (not p.invoice_no or p.invoice_no not in covered_shipping_invoices):
+            if s_payer != 'supplier' and not is_ship_covered:
                 s_p = Decimal(str(meta_p.get('shippingPaidAmount') or (meta_p.get('shippingCost') if meta_p.get('shippingStatus') == 'paid' else 0) or 0))
                 
             l_p = Decimal('0.00')
-            if l_payer != 'supplier' and (not p.invoice_no or (p.invoice_no not in covered_purchase_labor_invoices and p.invoice_no not in covered_cement_unloading_invoices)):
+            if l_payer != 'supplier' and not is_labor_covered:
                 l_p = Decimal(str(meta_p.get('laborPaidAmount') or (meta_p.get('laborCost') if meta_p.get('laborStatus') == 'paid' else 0) or 0))
                 
             extra_purchase_cash_out += (s_p + l_p)
@@ -493,23 +531,24 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
     for s in sales_qs.filter(notes__startswith='{'):
         try:
             meta_s = json.loads(s.notes.split('\n')[0])
+            s_inv = (s.invoice_no or '').strip()
             # Cement loading
-            if not s.invoice_no or s.invoice_no not in covered_cement_loading_invoices:
+            if not s_inv or (s_inv not in covered_cement_loading_invoices and s_inv.upper() not in covered_cement_loading_invoices):
                 if not meta_s.get('isHistoricalLabor'):
                     c_p = Decimal(str(meta_s.get('cementLoadingPaidAmount') or (meta_s.get('cementLaborCost') if meta_s.get('cementLoadingPaid') else 0) or 0))
                     extra_sales_cash_out += c_p
             # Cement unloading
-            if not s.invoice_no or s.invoice_no not in covered_cement_unloading_invoices:
+            if not s_inv or (s_inv not in covered_cement_unloading_invoices and s_inv.upper() not in covered_cement_unloading_invoices):
                 if not meta_s.get('isHistoricalLabor'):
                     cu_p = Decimal(str(meta_s.get('cementUnloadingPaidAmount') or (meta_s.get('cementUnloadingCost') if meta_s.get('cementUnloadingPaid') else 0) or 0))
                     extra_sales_cash_out += cu_p
             # Rod labor loading
-            if not s.invoice_no or s.invoice_no not in covered_rod_labor_invoices:
+            if not s_inv or (s_inv not in covered_rod_labor_invoices and s_inv.upper() not in covered_rod_labor_invoices):
                 if not meta_s.get('isHistoricalLabor'):
                     r_p = Decimal(str(meta_s.get('rodLaborPaidAmount') or (meta_s.get('rodLaborCost') if meta_s.get('rodLaborPaid') else 0) or 0))
                     extra_sales_cash_out += r_p
             # Sales shipping
-            if not s.invoice_no or s.invoice_no not in covered_shipping_invoices:
+            if not s_inv or (s_inv not in covered_shipping_invoices and s_inv.upper() not in covered_shipping_invoices):
                 if not meta_s.get('isHistoricalShipping'):
                     sh_p = Decimal(str(meta_s.get('salesShippingPaidAmount') or (meta_s.get('shippingCost') if meta_s.get('salesShippingPaid') else 0) or 0))
                     extra_sales_cash_out += sh_p
