@@ -446,6 +446,7 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
     covered_cement_loading_invoices = set()
     covered_cement_unloading_invoices = set()
     covered_rod_labor_invoices = set()
+    covered_rod_unloading_invoices = set()
 
     import re
 
@@ -490,7 +491,9 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
             if 'ক্রয়' in title or 'ক্রয়' in notes:
                 if 'লেবার' in title or 'আনলোডিং' in title or 'আনলোড' in title or 'isLaborExpense' in notes:
                     covered_purchase_labor_invoices.add(inv)
-            if 'আনলোডিং' in title or 'আনলোড' in title or 'cement_unloading' in notes:
+            if ('রড' in title and ('আনলোডিং' in title or 'আনলোড' in title)) or 'rod_unloading' in notes:
+                covered_rod_unloading_invoices.add(inv)
+            elif 'আনলোডিং' in title or 'আনলোড' in title or 'cement_unloading' in notes:
                 covered_cement_unloading_invoices.add(inv)
             elif 'রড' in title or 'rod_loading' in notes:
                 covered_rod_labor_invoices.add(inv)
@@ -523,7 +526,7 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
         except Exception:
             pass
 
-    covered_invoices = covered_shipping_invoices | covered_purchase_labor_invoices | covered_cement_loading_invoices | covered_cement_unloading_invoices | covered_rod_labor_invoices
+    covered_invoices = covered_shipping_invoices | covered_purchase_labor_invoices | covered_cement_loading_invoices | covered_cement_unloading_invoices | covered_rod_labor_invoices | covered_rod_unloading_invoices
 
     # Calculate extra sales shipping, rod labor, and cement loading paid in cash from active sales
     # (Skip each item individually if already recorded in Expense table to prevent double-counting)
@@ -547,6 +550,11 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
                 if not meta_s.get('isHistoricalLabor'):
                     r_p = Decimal(str(meta_s.get('rodLaborPaidAmount') or (meta_s.get('rodLaborCost') if meta_s.get('rodLaborPaid') else 0) or 0))
                     extra_sales_cash_out += r_p
+            # Rod labor unloading
+            if not s_inv or (s_inv not in covered_rod_unloading_invoices and s_inv.upper() not in covered_rod_unloading_invoices):
+                if not meta_s.get('isHistoricalLabor'):
+                    ru_p = Decimal(str(meta_s.get('rodUnloadingPaidAmount') or (meta_s.get('rodUnloadingCost') if meta_s.get('rodUnloadingPaid') else 0) or 0))
+                    extra_sales_cash_out += ru_p
             # Sales shipping
             if not s_inv or (s_inv not in covered_shipping_invoices and s_inv.upper() not in covered_shipping_invoices):
                 if not meta_s.get('isHistoricalShipping'):
