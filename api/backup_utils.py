@@ -15,7 +15,7 @@ if not logger.handlers:
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
 
-SCOPES = ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 def json_serial(obj):
     if isinstance(obj, (datetime, date)):
@@ -196,8 +196,7 @@ def get_gdrive_service():
             refresh_token=refresh_token,
             token_uri="https://oauth2.googleapis.com/token",
             client_id=client_id,
-            client_secret=client_secret,
-            scopes=SCOPES
+            client_secret=client_secret
         )
         logger.info("Loaded Google Drive OAuth2 User Credentials with Refresh Token.")
         return build("drive", "v3", credentials=creds, cache_discovery=False)
