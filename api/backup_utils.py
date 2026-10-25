@@ -181,10 +181,29 @@ def generate_database_backup(destination_dir=None):
     return backup_path, backup_filename
 
 def get_gdrive_service():
-    """Builds and returns Google Drive API v3 service from credentials"""
-    from google.oauth2 import service_account
+    """Builds and returns Google Drive API v3 service from credentials (OAuth2 Refresh Token or Service Account)"""
     from googleapiclient.discovery import build
 
+    # 1. First priority: OAuth2 Refresh Token (Recommended for Personal Google Drive - no quota limitation)
+    refresh_token = os.environ.get("GDRIVE_REFRESH_TOKEN", "").strip()
+    client_id = os.environ.get("GDRIVE_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("GDRIVE_CLIENT_SECRET", "").strip()
+
+    if refresh_token and client_id and client_secret:
+        from google.oauth2.credentials import Credentials
+        creds = Credentials(
+            None,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=SCOPES
+        )
+        logger.info("Loaded Google Drive OAuth2 User Credentials with Refresh Token.")
+        return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+    # 2. Second priority: Service Account (For Google Workspace Shared Drives)
+    from google.oauth2 import service_account
     sa_json_raw = os.environ.get("GDRIVE_SERVICE_ACCOUNT_JSON", "").strip()
     sa_file_path = os.environ.get("GDRIVE_SERVICE_ACCOUNT_FILE", "").strip()
 
@@ -202,8 +221,8 @@ def get_gdrive_service():
         logger.info(f"Loaded Google Service Account from file: {sa_file_path}")
     else:
         raise ValueError(
-            "Neither GDRIVE_SERVICE_ACCOUNT_JSON nor GDRIVE_SERVICE_ACCOUNT_FILE is set! "
-            "Please provide Google Service Account credentials to enable Google Drive upload."
+            "Neither GDRIVE_REFRESH_TOKEN nor Service Account credentials are set! "
+            "Please provide credentials to enable Google Drive upload."
         )
 
     service = build("drive", "v3", credentials=creds, cache_discovery=False)

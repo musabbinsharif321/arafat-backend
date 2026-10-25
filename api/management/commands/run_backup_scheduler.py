@@ -26,11 +26,15 @@ class Command(BaseCommand):
         folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
         sa_json = os.environ.get("GDRIVE_SERVICE_ACCOUNT_JSON", "").strip()
         sa_file = os.environ.get("GDRIVE_SERVICE_ACCOUNT_FILE", "").strip()
+        refresh_token = os.environ.get("GDRIVE_REFRESH_TOKEN", "").strip()
+        client_id = os.environ.get("GDRIVE_CLIENT_ID", "").strip()
 
-        if not folder_id or (not sa_json and not sa_file):
+        has_creds = bool((refresh_token and client_id) or sa_json or sa_file)
+
+        if not folder_id or not has_creds:
             self.stdout.write(self.style.WARNING(
-                "Backup scheduler started, but GDRIVE_FOLDER_ID and/or Service Account credentials "
-                "are not configured. The scheduler will idle safely. Configure them in Railway to activate."
+                "Backup scheduler started, but GDRIVE_FOLDER_ID and/or Google Drive credentials "
+                "(GDRIVE_REFRESH_TOKEN or Service Account) are not configured. The scheduler will idle safely."
             ))
             # Sleep loop to keep process alive without error
             while True:

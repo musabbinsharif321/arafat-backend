@@ -1395,4 +1395,47 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         return Response({'detail': 'ব্যবহারকারী সফলভাবে মুছে ফেলা হয়েছে।'}, status=status.HTTP_204_NO_CONTENT)
 
 
+class BackupTriggerView(APIView):
+    """
+    On-demand database backup trigger to Google Drive.
+    Only accessible by Admin/Superuser.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminUserOnly]
+
+    def post(self, request):
+        from .backup_utils import perform_full_backup_to_gdrive
+        result = perform_full_backup_to_gdrive()
+        if result.get("status") == "success":
+            return Response(result, status=status.HTTP_200_OK)
+        return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class BackupStatusView(APIView):
+    """
+    Returns current configuration status of automated backup.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminUserOnly]
+
+    def get(self, request):
+        import os
+        folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+        has_sa_json = bool(os.environ.get("GDRIVE_SERVICE_ACCOUNT_JSON", "").strip())
+        has_sa_file = bool(os.environ.get("GDRIVE_SERVICE_ACCOUNT_FILE", "").strip())
+        auto_enabled = os.environ.get("ENABLE_AUTO_BACKUP", "").lower() == "true"
+        backup_time = os.environ.get("BACKUP_TIME_DHAKA", "00:00")
+        tz = os.environ.get("BACKUP_TIMEZONE", "Asia/Dhaka")
+        retention = os.environ.get("BACKUP_RETENTION_DAYS", "30")
+
+        return Response({
+            "auto_backup_enabled": auto_enabled,
+            "folder_id_configured": bool(folder_id),
+            "folder_id": folder_id,
+            "credentials_configured": has_sa_json or has_sa_file,
+            "backup_time": f"{backup_time} ({tz})",
+            "retention_days": retention,
+            "ready": auto_enabled and bool(folder_id) and (has_sa_json or has_sa_file)
+        })
+
+
+
 

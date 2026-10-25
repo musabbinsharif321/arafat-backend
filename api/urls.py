@@ -15,7 +15,9 @@ from .views import (
     LoginView,
     MeView,
     LogoutView,
-    UserManagementViewSet
+    UserManagementViewSet,
+    BackupTriggerView,
+    BackupStatusView
 )
 
 router = DefaultRouter()
@@ -36,5 +38,8 @@ urlpatterns = [
     path('auth/me/', MeView.as_view(), name='auth-me'),
     path('auth/logout/', LogoutView.as_view(), name='auth-logout'),
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('backup/trigger/', BackupTriggerView.as_view(), name='backup-trigger'),
+    path('backup/status/', BackupStatusView.as_view(), name='backup-status'),
     path('', include(router.urls)),
 ]
+
