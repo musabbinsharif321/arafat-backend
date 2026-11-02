@@ -96,7 +96,8 @@ def dump_postgres_database(output_file_path):
         f_out.write(f"-- Total Tables: {len(tables)}\n")
         f_out.write("-- ========================================================\n\n")
         f_out.write("SET client_encoding = 'UTF8';\n")
-        f_out.write("SET standard_conforming_strings = on;\n\n")
+        f_out.write("SET standard_conforming_strings = on;\n")
+        f_out.write("SET session_replication_role = 'replica';\n\n")
 
         total_rows = 0
         for t in tables:
@@ -146,6 +147,8 @@ def dump_postgres_database(output_file_path):
 
             if "id" in col_names:
                 f_out.write(f"SELECT setval(pg_get_serial_sequence('public.{sql.Identifier(t).as_string(conn)}', 'id'), COALESCE((SELECT MAX(id) FROM public.{sql.Identifier(t).as_string(conn)}), 1), true) WHERE pg_get_serial_sequence('public.{sql.Identifier(t).as_string(conn)}', 'id') IS NOT NULL;\n")
+
+        f_out.write("\n-- Re-enable normal constraints\nSET session_replication_role = 'origin';\n")
 
     cur.close()
     conn.close()
