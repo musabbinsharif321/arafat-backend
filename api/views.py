@@ -645,7 +645,7 @@ from .services import recalculate_product_stock_and_cost, generate_product_cost_
 
 def apply_product_custom_ordering(qs):
     cat_order = Case(
-        When(Q(category_name='রড') | Q(category__name='রড') | Q(name__icontains='রড') | Q(brand__iexact='BSRM') | Q(brand__iexact='SCRM') | Q(brand__iexact='SCRM TMX') | Q(brand__iexact='KSML') | Q(brand__iexact='HKG') | Q(brand__iexact='DSRM'), then=Value(1)),
+        When(Q(category_name='রড') | Q(category__name='রড') | Q(name__icontains='রড') | Q(brand__iexact='BSRM') | Q(brand__iexact='SCRM') | Q(brand__iexact='SCRM TMX') | Q(brand__iexact='KSML') | Q(brand__iexact='HKG') | Q(brand__iexact='DSRM') | Q(brand__iexact='RRM'), then=Value(1)),
         When(Q(category_name='রিং') | Q(category__name='রিং') | Q(name__icontains='রিং') | Q(name__icontains='ring'), then=Value(2)),
         When(Q(category_name='সিমেন্ট') | Q(category__name='সিমেন্ট') | Q(name__icontains='সিমেন্ট') | Q(name__icontains='cement') | Q(brand__icontains='Holcim') | Q(brand__icontains='King') | Q(brand__icontains='Aman'), then=Value(3)),
         default=Value(4),
@@ -653,13 +653,14 @@ def apply_product_custom_ordering(qs):
     )
 
     sub_order = Case(
-        # Rods: BSRM (1), SCRM (2), SCRM TMX (3), KSML (4), HKG (5), DSRM (6)
+        # Rods: BSRM (1), SCRM (2), SCRM TMX (3), KSML (4), HKG (5), DSRM (6), RRM (7)
         When(Q(brand__iexact='BSRM') | Q(name__icontains='BSRM'), then=Value(10)),
         When(Q(brand__iexact='SCRM TMX') | Q(name__icontains='SCRM TMX') | Q(name__icontains='TMX'), then=Value(30)),
         When(Q(brand__iexact='SCRM') | Q(name__icontains='SCRM'), then=Value(20)),
         When(Q(brand__iexact='KSML') | Q(name__icontains='KSML'), then=Value(40)),
         When(Q(brand__iexact='HKG') | Q(name__icontains='HKG'), then=Value(50)),
         When(Q(brand__iexact='DSRM') | Q(name__icontains='DSRM'), then=Value(60)),
+        When(Q(brand__iexact='RRM') | Q(name__icontains='RRM'), then=Value(70)),
 
         # Rings: 3-3, 3-4, 3-7, 7-7, 7-9, Pistol
         When(Q(name__icontains='3-3') | Q(name__icontains='3*3') | Q(name__icontains='3x3') | Q(name__icontains='৩-৩'), then=Value(100)),

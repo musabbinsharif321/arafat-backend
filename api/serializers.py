@@ -245,12 +245,15 @@ def find_or_create_product_for_purchase(item_name, unit, price, brand_param=None
         'premier': ['premier', 'প্রিমিয়ার'],
         'crown': ['crown', 'ক্রাউন'],
         'akij': ['akij', 'আকিজ'],
-        'king brand': ['king brand', 'কিং ব্র্যান্ড']
+        'king brand': ['king brand', 'কিং ব্র্যান্ড'],
+        'rrm': ['rrm', 'আরআরএম', 'আর আর এম']
     }
 
+    matched_brand_key = None
     matched_brand_tokens = []
     for brand_key, aliases in brand_dictionary.items():
         if any(alias in cleaned_norm for alias in aliases):
+            matched_brand_key = brand_key
             matched_brand_tokens = aliases
             break
 
@@ -374,7 +377,7 @@ def find_or_create_product_for_purchase(item_name, unit, price, brand_param=None
         name=cleaned_name,
         category=cat_obj,
         category_name=category_head,
-        brand=brand_param or '',
+        brand=brand_param or (matched_brand_key.upper() if matched_brand_key else ''),
         unit=unit or ('কেজি' if category_head == 'রড' else 'বস্তা' if category_head == 'সিমেন্ট' else 'পিস'),
         purchase_price=price or 0.00,
         sell_price=sp,
