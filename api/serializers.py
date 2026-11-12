@@ -459,8 +459,8 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
         text = f"{title} {notes}"
         
         found_invs = set()
-        # 1. Match INV-... or PUR-... (case-insensitive)
-        for inv in re.findall(r'(?:INV|PUR)-[A-Za-z0-9-]+', text, re.IGNORECASE):
+        # 1. Match INV-... or PUR-... or RET-... (case-insensitive)
+        for inv in re.findall(r'(?:INV|PUR|RET)-[A-Za-z0-9-]+', text, re.IGNORECASE):
             inv_clean = inv.strip()
             found_invs.add(inv_clean)
             found_invs.add(inv_clean.upper())
@@ -531,10 +531,11 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
 
     covered_invoices = covered_shipping_invoices | covered_purchase_labor_invoices | covered_cement_loading_invoices | covered_cement_unloading_invoices | covered_rod_labor_invoices | covered_rod_unloading_invoices
 
-    # Calculate extra sales shipping, rod labor, and cement loading paid in cash from active sales
+    # Calculate extra sales & sale return shipping, rod labor, and cement loading paid in cash from active transactions
     # (Skip each item individually if already recorded in Expense table to prevent double-counting)
     extra_sales_cash_out = Decimal('0.00')
-    for s in sales_qs.filter(notes__startswith='{'):
+    active_sales_like = list(sales_qs.filter(notes__startswith='{')) + list(sale_returns_qs.filter(notes__startswith='{'))
+    for s in active_sales_like:
         try:
             meta_s = json.loads(s.notes.split('\n')[0])
             s_inv = (s.invoice_no or '').strip()
@@ -558,7 +559,7 @@ def get_available_balances(exclude_tx_id=None, exclude_expense_id=None):
                 if not meta_s.get('isHistoricalLabor'):
                     ru_p = Decimal(str(meta_s.get('rodUnloadingPaidAmount') or (meta_s.get('rodUnloadingCost') if meta_s.get('rodUnloadingPaid') else 0) or 0))
                     extra_sales_cash_out += ru_p
-            # Sales shipping
+            # Sales / return shipping
             if not s_inv or (s_inv not in covered_shipping_invoices and s_inv.upper() not in covered_shipping_invoices):
                 if not meta_s.get('isHistoricalShipping'):
                     sh_p = Decimal(str(meta_s.get('salesShippingPaidAmount') or (meta_s.get('shippingCost') if meta_s.get('salesShippingPaid') else 0) or 0))
