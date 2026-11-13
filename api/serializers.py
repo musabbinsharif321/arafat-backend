@@ -113,9 +113,21 @@ def recalculate_party_balances(party):
         payments_agg = Transaction.objects.filter(party=party, transaction_type='payment_in').exclude(status__in=['pending', 'draft', 'cancelled', 'rejected']).aggregate(p=Sum('paid_amount'), d=Sum('discount'))
         payments_tot = (payments_agg['p'] or Decimal('0.00')) + (payments_agg['d'] or Decimal('0.00'))
         payments_out_agg = Transaction.objects.filter(party=party, transaction_type='payment_out').exclude(status__in=['pending', 'draft', 'cancelled', 'rejected']).aggregate(p=Sum('paid_amount'))['p'] or Decimal('0.00')
-        returns_agg = Transaction.objects.filter(party=party, transaction_type='sale_return').exclude(status__in=['pending', 'draft', 'cancelled', 'rejected']).aggregate(r=Sum('total_amount'), p=Sum('paid_amount'))
-        returns_tot = returns_agg['r'] or Decimal('0.00')
-        returns_refund_paid = returns_agg['p'] or Decimal('0.00')
+        returns = Transaction.objects.filter(party=party, transaction_type='sale_return').exclude(status__in=['pending', 'draft', 'cancelled', 'rejected'])
+        returns_tot = Decimal('0.00')
+        returns_refund_paid = Decimal('0.00')
+        for r_tx in returns:
+            amt = Decimal(str(r_tx.total_amount or 0))
+            if r_tx.notes and r_tx.notes.strip().startswith('{'):
+                try:
+                    meta = json.loads(r_tx.notes.split('\n')[0])
+                    cust_charges = Decimal(str(meta.get('customerPayableCharges') or 0))
+                    if cust_charges > 0:
+                        amt = max(Decimal('0.00'), amt - cust_charges)
+                except Exception:
+                    pass
+            returns_tot += amt
+            returns_refund_paid += Decimal(str(r_tx.paid_amount or 0))
         net_returns_adjusted = returns_tot - returns_refund_paid
         
         net_balance = (party.opening_balance or Decimal('0.00')) + sales_tot - sales_paid - payments_tot + payments_out_agg - net_returns_adjusted
